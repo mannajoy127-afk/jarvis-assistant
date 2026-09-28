@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S — Personal AI Assistant</title>
+<meta name="description" content="J.A.R.V.I.S — a voice + text personal AI assistant that manages your tasks, notes, reminders and answers questions.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2242%22 fill=%22%2305080c%22 stroke=%22%234dd8e6%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2218%22 fill=%22%234dd8e6%22/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#05080c;
+    --bg-panel:#0a1219;
+    --bg-panel-2:#0d1720;
+    --line:#173040;
+    --cyan:#4dd8e6;
+    --cyan-bright:#a6f3ff;
+    --cyan-dim:#1c4a56;
+    --gold:#e8a544;
+    --text:#d7ecf2;
+    --muted:#5f7e8a;
+    --danger:#e6614d;
+    --radius:2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 50% 18%, #0d1e26 0%, var(--bg-deep) 55%),
+      var(--bg-deep);
+    color:var(--text);
+    font-family:'Rajdhani',sans-serif;
+    font-size:16px;
+    min-height:100vh;
+    overflow-x:hidden;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  ::selection{background:var(--cyan-dim);color:var(--cyan-bright);}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--cyan-dim);border-radius:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  /* ---------- ambient scanline / grid overlay ---------- */
+  .grid-overlay{
+    position:fixed;inset:0;pointer-events:none;z-index:1;
+    background-image:
+      linear-gradient(rgba(77,216,230,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(77,216,230,0.035) 1px, transparent 1px);
+    background-size:38px 38px;
+    mask-image:radial-gradient(circle at 50% 30%, black 0%, transparent 75%);
+  }
+
+  /* ---------- boot screen ---------- */
+  #boot{
+    position:fixed;inset:0;z-index:50;background:var(--bg-deep);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:18px;transition:opacity .6s ease, visibility .6s ease;
+  }
+  #boot.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .boot-ring{
+    width:120px;height:120px;border-radius:50%;
+    border:2px solid var(--cyan-dim);
+    border-top-color:var(--cyan);
+    animation:spin 1.4s linear infinite;
+    position:relative;
+  }
+  .boot-ring::after{
+    content:'';position:absolute;inset:18px;border-radius:50%;
+    border:1px solid var(--cyan-dim);border-bottom-color:var(--gold);
+    animation:spin 2.2s linear infinite reverse;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #boot-log{
+    font-family:'Rajdhani',sans-serif;font-size:13px;letter-spacing:.08em;
+    color:var(--cyan);min-height:90px;text-align:center;line-height:1.9;
+  }
+  #boot-log div{opacity:0;animation:fadeUp .4s ease forwards;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  #boot-enter{
+    margin-top:6px;padding:10px 26px;background:transparent;
+    border:1px solid var(--cyan);color:var(--cyan-bright);
+    font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:.12em;
+    cursor:pointer;opacity:0;transition:opacity .4s ease, background .2s ease;
+  }
+  #boot-enter.show{opacity:1;}
+  #boot-enter:hover{background:rgba(77,216,230,0.12);}
+
+  /* ---------- header ---------- */
+  header{
+    position:relative;z-index:2;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 22px;border-bottom:1px solid var(--line);
+    flex-wrap:wrap;gap:10px;
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;}
+  .brand h1{
+    font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;
+    margin:0;letter-spacing:.08em;color:var(--cyan-bright);
+    text-shadow:0 0 14px rgba(77,216,230,.35);
+  }
+  .brand span{font-size:12px;color:var(--muted);letter-spacing:.04em;}
+  .status{display:flex;align-items:center;gap:16px;font-size:13px;color:var(--muted);}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);display:inline-block;margin-right:6px;animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  #clock{font-family:'Orbitron',sans-serif;font-size:15px;color:var(--text);}
+  button.icon-btn{
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    width:34px;height:34px;cursor:pointer;font-size:15px;border-radius:var(--radius);
+    display:flex;align-items:center;justify-content:center;transition:.2s;
+  }
+  button.icon-btn:hover{border-color:var(--cyan);color:var(--cyan-bright);}
+
+  /* ---------- layout ---------- */
+  main{
+    position:relative;z-index:2;
+    display:grid;
+    grid-template-columns:260px minmax(0,1fr) 260px;
+    gap:16px;padding:18px;max-width:1400px;margin:0 auto;
+    align-items:start;
+  }
+  @media (max-width:980px){
+    main{grid-template-columns:1fr;}
+  }
+  .panel{
+    background:linear-gradient(180deg, var(--bg-panel), var(--bg-panel-2));
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;
+  }
+  .panel h2{
+    font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:.1em;
+    color:var(--gold);margin:0 0 12px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .panel h2 small{color:var(--muted);font-family:'Rajdhani',sans-serif;letter-spacing:0;font-size:11px;}
+
+  /* ---------- core / hero ---------- */
+  .core-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0 4px;}
+  .core{
+    width:170px;height:170px;position:relative;display:flex;align-items:center;justify-content:center;
+  }
+  .core .ring{position:absolute;border-radius:50%;border:1px solid var(--cyan-dim);}
+  .core .ring.r1{inset:0;border-top-color:var(--cyan);animation:spin 7s linear infinite;}
+  .core .ring.r2{inset:16px;border-bottom-color:var(--gold);animation:spin 5s linear infinite reverse;}
+  .core .ring.r3{inset:32px;border-left-color:var(--cyan-bright);animation:spin 3.2s linear infinite;}
+  .core .center{
+    width:60px;height:60px;border-radius:50%;
+    background:radial-gradient(circle, var(--cyan-bright), var(--cyan) 55%, var(--cyan-dim) 100%);
+    box-shadow:0 0 30px 6px rgba(77,216,230,.45), 0 0 60px 14px rgba(77,216,230,.15);
+    animation:breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+  .core.listening .center{background:radial-gradient(circle, #fff, var(--gold) 55%, #7a5320 100%);box-shadow:0 0 34px 8px rgba(232,165,68,.5);}
+  #core-caption{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.15em;color:var(--muted);}
+
+  /* ---------- chat console ---------- */
+  #chat-log{
+    height:340px;overflow-y:auto;padding:12px 4px;display:flex;flex-direction:column;gap:10px;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:10px 0;
+  }
+  .msg{max-width:82%;padding:9px 13px;border-radius:var(--radius);font-size:14.5px;line-height:1.45;animation:fadeUp .25s ease;}
+  .msg.user{align-self:flex-end;background:rgba(77,216,230,0.1);border:1px solid var(--cyan-dim);color:var(--cyan-bright);}
+  .msg.jarvis{align-self:flex-start;background:rgba(232,165,68,0.06);border:1px solid #3a2c14;color:var(--text);}
+  .msg .tag{display:block;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.12em;color:var(--muted);margin-bottom:4px;}
+  #input-row{display:flex;gap:8px;align-items:center;}
+  #cmd-input{
+    flex:1;background:var(--bg-deep);border:1px solid var(--line);color:var(--text);
+    padding:11px 12px;font-family:'Rajdhani',sans-serif;font-size:15px;border-radius:var(--radius);outline:none;
+  }
+  #cmd-input:focus{border-color:var(--cyan);}
+  #mic-btn,#send-btn{
+    width:42px;height:42px;flex-shrink:0;border-radius:var(--radius);border:1px solid var(--cyan-dim);
+    background:transparent;color:var(--cyan);cursor:pointer;font-size:16px;transition:.2s;
+  }
+  #mic-btn:hover,#send-btn:hover{background:rgba(77,216,230,.1);}
+  #mic-btn.on{background:var(--gold);border-color:var(--gold);color:#1a1206;animation:pulse 1s ease-in-out infinite;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:8px;}
+
+  /* ---------- lists (tasks/notes/reminders) ---------- */
+  .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;}
+  .list li{
+    display:flex;align-items:flex-start;gap:8px;font-size:13.5px;padding:7px 8px;
+    background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:var(--radius);
+  }
+  .list li.done{opacity:.4;text-decoration:line-through;}
+  .list li .txt{flex:1;word-break:break-word;}
+  .list li button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px;}
+  .list li button:hover{color:var(--danger);}
+  .empty{color:var(--muted);font-size:12.5px;font-style:normal;}
+  .add-row{display:flex;gap:6px;margin-top:10px;}
+  .add-row input{
+    flex:1;background:var(--bg-deep);border:1px solid var(--line);color:var(--text);
+    padding:7px 9px;font-family:'Rajdhani',sans-serif;font-size:13.5px;border-radius:var(--radius);outline:none;
+  }
+  .add-row input:focus{border-color:var(--cyan);}
+  .add-row button{
+    background:transparent;border:1px solid var(--cyan-dim);color:var(--cyan);
+    padding:0 12px;cursor:pointer;border-radius:var(--radius);
+  }
+
+  /* ---------- quick tools ---------- */
+  .tool-btn{
+    width:100%;text-align:left;background:transparent;border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;margin-bottom:7px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-size:13.5px;
+    border-radius:var(--radius);transition:.2s;display:flex;justify-content:space-between;align-items:center;
+  }
+  .tool-btn:hover{border-color:var(--cyan);color:var(--cyan-bright);}
+  .tool-btn span.k{color:var(--muted);font-size:11px;}
+
+  /* ---------- settings modal ---------- */
+  #settings-overlay{
+    position:fixed;inset:0;background:rgba(2,5,7,.75);z-index:40;
+    display:none;align-items:center;justify-content:center;padding:16px;
+  }
+  #settings-overlay.show{display:flex;}
+  #settings-panel{
+    width:100%;max-width:460px;background:var(--bg-panel);border:1px solid var(--cyan-dim);
+    border-radius:var(--radius);padding:20px;max-height:88vh;overflow-y:auto;
+  }
+  #settings-panel h2{margin-top:0;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px;letter-spacing:.03em;}
+  .field input,.field select{
+    width:100%;background:var(--bg-deep);border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;border-radius:var(--radius);outline:none;
+  }
+  .field input:focus,.field select:focus{border-color:var(--cyan);}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);}
+  .toggle-row:last-of-type{border-bottom:none;}
+  .switch{position:relative;width:40px;height:22px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider{position:absolute;inset:0;background:var(--line);border-radius:22px;cursor:pointer;transition:.2s;}
+  .slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:var(--muted);border-radius:50%;transition:.2s;}
+  .switch input:checked + .slider{background:var(--cyan-dim);}
+  .switch input:checked + .slider::before{transform:translateX(18px);background:var(--cyan-bright);}
+  #settings-panel .row-btns{display:flex;gap:10px;margin-top:16px;}
+  #settings-panel .row-btns button{
+    flex:1;padding:10px;border-radius:var(--radius);cursor:pointer;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.08em;
+  }
+  #save-settings{background:var(--cyan-dim);border:1px solid var(--cyan);color:var(--cyan-bright);}
+  #close-settings{background:transparent;border:1px solid var(--line);color:var(--muted);}
+  .note-small{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:4px;}
+
+  footer{
+    position:relative;z-index:2;text-align:center;padding:20px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-overlay"></div>
+
+<!-- BOOT SEQUENCE -->
+<div id="boot">
+  <div class="boot-ring"></div>
+  <div id="boot-log"></div>
+  <button id="boot-enter">ENTER</button>
+</div>
+
+<header>
+  <div class="brand">
+    <h1>J.A.R.V.I.S</h1>
+    <span>Just A Rather Very Intelligent System</span>
+  </div>
+  <div class="status">
+    <span><span class="dot"></span>ONLINE</span>
+    <span id="clock">--:--:--</span>
+    <button class="icon-btn" id="open-settings" title="Settings">⚙️</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- LEFT: TASKS + NOTES -->
+  <section class="panel" id="panel-left">
+    <h2>TASKS <small id="task-count"></small></h2>
+    <ul class="list" id="task-list"></ul>
+    <div class="add-row">
+      <input type="text" id="task-input" placeholder="Add a task…" maxlength="140">
+      <button id="task-add">+</button>
+    </div>
+
+    <h2 style="margin-top:20px;">NOTES <small id="note-count"></small></h2>
+    <ul class="list" id="note-list"></ul>
+    <div class="add-row">
+      <input type="text" id="note-input" placeholder="Add a note…" maxlength="240">
+      <button id="note-add">+</button>
+    </div>
+  </section>
+
+  <!-- CENTER: CORE + CHAT -->
+  <section class="panel" id="panel-center">
+    <div class="core-wrap">
+      <div class="core" id="core">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="center"></div>
+      </div>
+      <div id="core-caption">STANDING BY</div>
+    </div>
+
+    <div id="chat-log"></div>
+
+    <div id="input-row">
+      <button id="mic-btn" title="Voice input">🎤</button>
+      <input type="text" id="cmd-input" placeholder="Type a command or question, sir…" autocomplete="off">
+      <button id="send-btn" title="Send">➤</button>
+    </div>
+    <div class="hint">Try: "add task finish geography report", "set timer for 5 minutes", "explain plate tectonics", "tell me a joke", "help"</div>
+  </section>
+
+  <!-- RIGHT: REMINDERS + QUICK TOOLS -->
+  <section class="panel" id="panel-right">
+    <h2>REMINDERS <small id="reminder-count"></small></h2>
+    <ul class="list" id="reminder-list"></ul>
+    <div class="note-small">Say or type: "remind me to call mom at 18:00"</div>
+
+    <h2 style="margin-top:20px;">QUICK TOOLS</h2>
+    <button class="tool-btn" data-cmd="what time is it">Current time <span class="k">time</span></button>
+    <button class="tool-btn" data-cmd="tell me a joke">Tell a joke <span class="k">fun</span></button>
+    <button class="tool-btn" data-cmd="motivate me">Daily quote <span class="k">focus</span></button>
+    <button class="tool-btn" data-cmd="clear chat">Clear console <span class="k">reset</span></button>
+    <button class="tool-btn" id="tool-settings">AI &amp; voice settings <span class="k">⚙️</span></button>
+  </section>
+
+</main>
+
+<footer>J.A.R.V.I.S runs entirely in this browser tab · data stays on this device · designed for desktop &amp; mobile</footer>
+
+<!-- SETTINGS MODAL -->
+<div id="settings-overlay">
+  <div id="settings-panel">
+    <h2 style="font-family:'Orbitron',sans-serif;font-size:14px;color:var(--cyan-bright);letter-spacing:.08em;">SYSTEM SETTINGS</h2>
+
+    <div class="toggle-row">
+      <span>Voice replies (text‑to‑speech)</span>
+      <label class="switch"><input type="checkbox" id="opt-voice"><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>Wake word ("Hey Jarvis") continuous listening</span>
+      <label class="switch"><input type="checkbox" id="opt-wake"><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span>Desktop notifications for reminders</span>
+      <label class="switch"><input type="checkbox" id="opt-notify"><span class="slider"></span></label>
+    </div>
+
+    <div class="field" style="margin-top:16px;">
+      <label>AI endpoint (OpenAI‑compatible /chat/completions URL) — optional</label>
+      <input type="text" id="opt-endpoint" placeholder="https://api.openai.com/v1/chat/completions">
+    </div>
+    <div class="field">
+      <label>API key — stored only in this browser's local storage</label>
+      <input type="password" id="opt-key" placeholder="sk-…">
+    </div>
+    <div class="field">
+      <label>Model name</label>
+      <input type="text" id="opt-model" placeholder="gpt-4o-mini">
+    </div>
+    <p class="note-small">
+      Connecting an AI key lets JARVIS answer open‑ended questions on any topic — schoolwork, general knowledge, social advice, and more. Without a key, JARVIS still handles tasks, notes, reminders, timers, time/date, calculations, jokes, quotes, and web searches. Some providers block direct browser requests (CORS); if a request fails, a small proxy server is usually needed — see the README.
+    </p>
+
+    <div class="row-btns">
+      <button id="close-settings">CLOSE</button>
+      <button id="save-settings">SAVE</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- STATE ---------------- */
+  const DEFAULT_STATE = {
+    tasks: [], notes: [], reminders: [],
+    settings: { voice:true, wake:false, notify:false, aiEndpoint:'', aiKey:'', aiModel:'gpt-4o-mini' }
+  };
+  let state = loadState();
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem('jarvis_state');
+      if(!raw) return structuredClone(DEFAULT_STATE);
+      const parsed = JSON.parse(raw);
+      return Object.assign(structuredClone(DEFAULT_STATE), parsed, {
+        settings: Object.assign({}, DEFAULT_STATE.settings, parsed.settings || {})
+      });
+    }catch(e){ return structuredClone(DEFAULT_STATE); }
+  }
+  function saveState(){
+    try{ localStorage.setItem('jarvis_state', JSON.stringify(state)); }catch(e){}
+  }
+
+  /* ---------------- BOOT SEQUENCE ---------------- */
+  const bootLines = [
+    "INITIALIZING J.A.R.V.I.S CORE…",
+    "LOADING MEMORY BANKS…",
+    "CALIBRATING VOICE INTERFACE…",
+    "ALL SYSTEMS NOMINAL.",
+    "WELCOME BACK."
+  ];
+  const bootLog = document.getElementById('boot-log');
+  const bootEnter = document.getElementById('boot-enter');
+  let li = 0;
+  function nextBootLine(){
+    if(li >= bootLines.length){ bootEnter.classList.add('show'); return; }
+    const d = document.createElement('div');
+    d.textContent = bootLines[li];
+    bootLog.appendChild(d);
+    li++;
+    setTimeout(nextBootLine, 420);
+  }
+  setTimeout(nextBootLine, 300);
+  function dismissBoot(){ document.getElementById('boot').classList.add('hidden'); document.getElementById('cmd-input').focus(); }
+  bootEnter.addEventListener('click', dismissBoot);
+  setTimeout(dismissBoot, 3600);
+
+  /* ---------------- CLOCK ---------------- */
+  function tickClock(){
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }
+  tickClock(); setInterval(tickClock, 1000);
+
+  /* ---------------- CHAT LOG ---------------- */
+  const chatLog = document.getElementById('cmd-input') && document.getElementById('chat-log');
+  function addMessage(sender, text){
+    const div = document.createElement('div');
+    div.className = 'msg ' + (sender === 'user' ? 'user' : 'jarvis');
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = sender === 'user' ? 'YOU' : 'JARVIS';
+    div.appendChild(tag);
+    const body = document.createElement('div');
+    body.textContent = text;
+    div.appendChild(body);
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  addMessage('jarvis', "Systems online. How can I help, sir?");
+
+  /* ---------------- SPEECH SYNTHESIS ---------------- */
+  function speak(text){
+    if(!state.settings.voice) return;
+    if(!('speechSynthesis' in window)) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.02; u.pitch = 0.85;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  /* ---------------- SPEECH RECOGNITION ---------------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizer = null, listening = false, wakeMode = false;
+  const micBtn = document.getElementById('mic-btn');
+  const core = document.getElementById('core');
+  const coreCaption = document.getElementById('core-caption');
+
+  if(SR){
+    recognizer = new SR();
+    recognizer.continuous = false;
+    recognizer.interimResults = false;
+    recognizer.lang = 'en-US';
+
+    recognizer.onstart = function(){
+      listening = true; micBtn.classList.add('on'); core.classList.add('listening');
+      coreCaption.textContent = 'LISTENING…';
+    };
+    recognizer.onend = function(){
+      listening = false; micBtn.classList.remove('on'); core.classList.remove('listening');
+      coreCaption.textContent = 'STANDING BY';
+      if(wakeMode){ setTimeout(()=>{ try{ recognizer.start(); }catch(e){} }, 400); }
+    };
+    recognizer.onerror = function(){
+      listening = false; micBtn.classList.remove('on'); core.classList.remove('listening');
+      coreCaption.textContent = 'STANDING BY';
+    };
+    recognizer.onresult = function(evt){
+      const transcript = evt.results[0][0].transcript.trim();
+      if(wakeMode){
+        const lower = transcript.toLowerCase();
+        if(lower.includes('jarvis')){
+          const cleaned = lower.replace(/^(hey|ok|hi)?\s*jarvis[,]?\s*/i,'').trim();
+          if(cleaned){ addMessage('user', transcript); handleCommand(cleaned); }
+        }
+      }else{
+        document.getElementById('cmd-input').value = transcript;
+        addMessage('user', transcript);
+        handleCommand(transcript);
+      }
+    };
+  }else{
+    micBtn.disabled = true;
+    micBtn.title = 'Voice recognition is not supported in this browser';
+    micBtn.style.opacity = '0.4';
+  }
+
+  micBtn.addEventListener('click', function(){
+    if(!recognizer) return;
+    if(listening){ recognizer.stop(); return; }
+    try{ recognizer.start(); }catch(e){}
+  });
+
+  function setWakeMode(on){
+    wakeMode = on;
+    if(!recognizer) return;
+    if(on){
+      recognizer.continuous = false;
+      try{ recognizer.start(); }catch(e){}
+      coreCaption.textContent = 'AWAITING WAKE WORD';
+    }else{
+      try{ recognizer.stop(); }catch(e){}
+      coreCaption.textContent = 'STANDING BY';
+    }
+  }
+
+  /* ---------------- NOTIFICATIONS ---------------- */
+  function ensureNotifyPermission(){
+    if(state.settings.notify && 'Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission();
+    }
+  }
+  function notify(title, body){
+    if(state.settings.notify && 'Notification' in window && Notification.permission === 'granted'){
+      try{ new Notification(title, {body}); }catch(e){}
+    }
+  }
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = 880;
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.start(); osc.stop(ctx.currentTime + 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    }catch(e){}
+  }
+
+  /* ---------------- RENDER LISTS ---------------- */
+  function renderList(listId, countId, items, emptyText, formatter){
+    const ul = document.getElementById(listId);
+    ul.innerHTML = '';
+    document.getElementById(countId).textContent = items.length ? '(' + items.length + ')' : '';
+    if(!items.length){
+      const li = document.createElement('li');
+      li.className = 'empty'; li.textContent = emptyText;
+      li.style.border = 'none'; li.style.background = 'none';
+      ul.appendChild(li);
+      return;
+    }
+    items.forEach((item, idx) => ul.appendChild(formatter(item, idx)));
+  }
+
+  function renderTasks(){
+    renderList('task-list','task-count', state.tasks, 'No tasks yet.', (t, idx) => {
+      const li = document.createElement('li');
+      if(t.done) li.classList.add('done');
+      const span = document.createElement('span'); span.className='txt'; span.textContent = t.text;
+      li.appendChild(span);
+      const doneBtn = document.createElement('button'); doneBtn.textContent = t.done ? '↺' : '✓';
+      doneBtn.title = t.done ? 'Mark not done' : 'Mark done';
+      doneBtn.addEventListener('click', ()=>{ t.done = !t.done; saveState(); renderTasks(); });
+      const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.title='Delete';
+      delBtn.addEventListener('click', ()=>{ state.tasks.splice(idx,1); saveState(); renderTasks(); });
+      li.appendChild(doneBtn); li.appendChild(delBtn);
+      return li;
+    });
+  }
+  function renderNotes(){
+    renderList('note-list','note-count', state.notes, 'No notes yet.', (n, idx) => {
+      const li = document.createElement('li');
+      const span = document.createElement('span'); span.className='txt'; span.textContent = n;
+      li.appendChild(span);
+      const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.title='Delete';
+      delBtn.addEventListener('click', ()=>{ state.notes.splice(idx,1); saveState(); renderNotes(); });
+      li.appendChild(delBtn);
+      return li;
+    });
+  }
+  function renderReminders(){
+    renderList('reminder-list','reminder-count', state.reminders, 'No reminders yet.', (r, idx) => {
+      const li = document.createElement('li');
+      const span = document.createElement('span'); span.className='txt';
+      span.textContent = r.time ? (r.text + ' — ' + r.time) : r.text;
+      li.appendChild(span);
+      const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.title='Delete';
+      delBtn.addEventListener('click', ()=>{ state.reminders.splice(idx,1); saveState(); renderReminders(); });
+      li.appendChild(delBtn);
+      return li;
+    });
+  }
+  renderTasks(); renderNotes(); renderReminders();
+
+  /* manual add rows */
+  function wireAddRow(inputId, btnId, pushFn, renderFn){
+    const input = document.getElementById(inputId), btn = document.getElementById(btnId);
+    function add(){
+      const v = input.value.trim();
+      if(!v) return;
+      pushFn(v); saveState(); renderFn(); input.value=''; input.focus();
+    }
+    btn.addEventListener('click', add);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') add(); });
+  }
+  wireAddRow('task-input','task-add', v => state.tasks.push({text:v, done:false}), renderTasks);
+  wireAddRow('note-input','note-add', v => state.notes.push(v), renderNotes);
+  /* ---------------- JOKES / QUOTES ---------------- */
+  const JOKES = [
+    "I would tell you a UDP joke, but you might not get it.",
+    "There are 10 types of people: those who understand binary and those who don't.",
+    "I've got a great joke about geography, but it doesn't quite map to this conversation.",
+    "Why did the developer go broke? Because they used up all their cache.",
+    "I'm not saying I'm Iron Man's assistant, but my sarcasm levels are suspiciously high, sir."
+  ];
+  const QUOTES = [
+    "\"The best way to predict the future is to create it.\" — keep building.",
+    "Small, consistent actions compound into remarkable outcomes.",
+    "Discipline is choosing between what you want now and what you want most.",
+    "Progress, not perfection, sir.",
+    "Every expert was once a beginner who refused to quit."
+  ];
+  const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+  /* ---------------- SAFE CALCULATOR ---------------- */
+  function safeCalc(expr){
+    const cleaned = expr.replace(/[^0-9+\-*/().%\s]/g, '');
+    if(!cleaned.trim()) return null;
+    try{
+      // eslint-disable-next-line no-new-func
+      const result = Function('"use strict"; return (' + cleaned + ')')();
+      if(typeof result === 'number' && isFinite(result)) return result;
+      return null;
+    }catch(e){ return null; }
+  }
+
+  /* ---------------- AI FALLBACK ---------------- */
+  async function askAI(query){
+    const { aiEndpoint, aiKey, aiModel } = state.settings;
+    if(!aiEndpoint || !aiKey){
+      return "That's outside my built‑in skills. Connect an AI key in Settings (gear icon) and I can answer open‑ended questions on any topic.";
+    }
+    try{
+      const res = await fetch(aiEndpoint, {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':'Bearer ' + aiKey
+        },
+        body: JSON.stringify({
+          model: aiModel || 'gpt-4o-mini',
+          messages: [
+            {role:'system', content:'You are J.A.R.V.I.S, a concise, helpful, slightly witty personal assistant. Keep answers under 120 words unless asked for more detail.'},
+            {role:'user', content: query}
+          ]
+        })
+      });
+      if(!res.ok){
+        let detail = '';
+        try{ detail = (await res.text()).slice(0, 220); }catch(e){}
+        throw new Error('HTTP ' + res.status + (detail ? ' - ' + detail : ''));
+      }
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content || data.content?.[0]?.text;
+      return text ? text.trim() : "I reached the AI service but couldn't parse a reply.";
+    }catch(err){
+      const isNetwork = /Failed to fetch|NetworkError|Load failed/i.test(err.message);
+      return "The AI service returned an error: " + err.message + (isNetwork ? " (the request never got a response - check your internet, ad-blocker, or the endpoint URL)." : "");
+    }
+  }
+
+  /* ---------------- TIMERS / REMINDERS ---------------- */
+  function setTimer(minutes, label){
+    const ms = minutes * 60000;
+    setTimeout(()=>{
+      beep();
+      notify('J.A.R.V.I.S Timer', label || (minutes + ' minute timer complete'));
+      addMessage('jarvis', 'Timer complete: ' + (label || (minutes + ' minutes')) + '.');
+      speak('Timer complete.');
+    }, ms);
+  }
+
+  /* ---------------- COMMAND PARSER ---------------- */
+  function respond(text){
+    addMessage('jarvis', text);
+    speak(text);
+  }
+
+  async function handleCommand(raw){
+    const input = raw.trim();
+    const lower = input.toLowerCase();
+    document.getElementById('cmd-input').value = '';
+
+    if(!input) return;
+
+    // greeting
+    if(/^(hi|hello|hey|hey jarvis|hi jarvis)[\s!.]*$/.test(lower)){
+      const h = new Date().getHours();
+      const g = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+      return respond(g + '. How can I help?');
+    }
+
+    // help
+    if(/^(help|what can you do)/.test(lower)){
+      return respond('I can manage tasks, notes and reminders; tell the time and date; run a timer; do calculations; tell a joke or a quote; open a website or run a web search; and, if you connect an AI key in Settings, answer open‑ended questions on any topic.');
+    }
+
+    // clear chat
+    if(/^clear chat/.test(lower)){
+      chatLog.innerHTML = '';
+      return respond('Console cleared.');
+    }
+
+    // time
+    if(/what('?s| is)? the time|current time|what time is it/.test(lower)){
+      return respond('It is ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '.');
+    }
+
+    // date
+    if(/what('?s| is)? (the )?date|what day is it|today'?s date/.test(lower)){
+      return respond('Today is ' + new Date().toLocaleDateString([], {weekday:'long', year:'numeric', month:'long', day:'numeric'}) + '.');
+    }
+
+    // joke
+    if(/tell me a joke|make me laugh|say something funny/.test(lower)){
+      return respond(pick(JOKES));
+    }
+
+    // quote / motivation
+    if(/motivate me|give me a quote|inspire me|daily quote/.test(lower)){
+      return respond(pick(QUOTES));
+    }
+
+    // add task
+    let m = lower.match(/^(?:add task|new task|create task)[:\s]+(.+)/) || lower.match(/^remind me to (.+)/);
+    if(m){
+      const text = input.slice(input.toLowerCase().indexOf(m[1])).trim();
+      state.tasks.push({text, done:false}); saveState(); renderTasks();
+      return respond('Task added: "' + text + '".');
+    }
+
+    // list tasks
+    if(/^(list|show) tasks/.test(lower)){
+      if(!state.tasks.length) return respond('You have no tasks recorded.');
+      const open = state.tasks.filter(t=>!t.done).length;
+      return respond('You have ' + state.tasks.length + ' task(s), ' + open + ' still open.');
+    }
+
+    // complete task by number
+    m = lower.match(/^(?:complete|finish|done with) task (\d+)/);
+    if(m){
+      const idx = parseInt(m[1],10)-1;
+      if(state.tasks[idx]){ state.tasks[idx].done = true; saveState(); renderTasks(); return respond('Task ' + m[1] + ' marked complete.'); }
+      return respond("I couldn't find task " + m[1] + '.');
+    }
+
+    // delete task by number
+    m = lower.match(/^delete task (\d+)/);
+    if(m){
+      const idx = parseInt(m[1],10)-1;
+      if(state.tasks[idx]){ const removed = state.tasks.splice(idx,1)[0]; saveState(); renderTasks(); return respond('Removed task: "' + removed.text + '".'); }
+      return respond("I couldn't find task " + m[1] + '.');
+    }
+
+    // add note
+    m = lower.match(/^(?:add note|note|jot down)[:\s]+(.+)/);
+    if(m){
+      const text = input.slice(input.toLowerCase().indexOf(m[1])).trim();
+      state.notes.push(text); saveState(); renderNotes();
+      return respond('Noted.');
+    }
+
+    // show notes
+    if(/^(show|list) notes/.test(lower)){
+      if(!state.notes.length) return respond('No notes on file.');
+      return respond('You have ' + state.notes.length + ' note(s). Check the Notes panel.');
+    }
+
+    // reminder with time
+    m = lower.match(/^remind me (?:to )?(.+?) at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/);
+    if(m){
+      const text = m[1].trim(); const time = m[2].trim();
+      state.reminders.push({text, time}); saveState(); renderReminders();
+      ensureNotifyPermission();
+      return respond('Reminder set: "' + text + '" at ' + time + '.');
+    }
+
+    // generic reminder
+    m = lower.match(/^remind me (?:about )?(.+)/);
+    if(m){
+      const text = m[1].trim();
+      state.reminders.push({text, time:''}); saveState(); renderReminders();
+      return respond('Reminder saved: "' + text + '".');
+    }
+
+    // timer
+    m = lower.match(/set (?:a )?timer for (\d+)\s*(minute|minutes|min|second|seconds|sec)/);
+    if(m){
+      let n = parseInt(m[1],10);
+      const unit = m[2];
+      const minutes = unit.startsWith('sec') ? n/60 : n;
+      setTimer(minutes, n + ' ' + (unit.startsWith('sec') ? 'second' : 'minute') + (n===1?'':'s') + ' timer');
+      ensureNotifyPermission();
+      return respond('Timer started for ' + n + ' ' + (unit.startsWith('sec') ? 'seconds' : 'minutes') + '.');
+    }
+
+    // calculator
+    m = lower.match(/^(?:calculate|what is|what's|compute)\s+([0-9+\-*/().%\s]+)$/);
+    if(m){
+      const result = safeCalc(m[1]);
+      return respond(result !== null ? (m[1].trim() + ' = ' + result) : "I couldn't compute that.");
+    }
+    if(/^[0-9+\-/().%\s]+$/.test(lower) && /[0-9]/.test(lower) && /[+\-/]/.test(lower)){
+      const result = safeCalc(lower);
+      if(result !== null) return respond(lower.trim() + ' = ' + result);
+    }
+
+    // open website
+    m = lower.match(/^open (.+)/);
+    if(m){
+      let site = m[1].trim().replace(/\s+/g,'');
+      if(!/^https?:\/\//.test(site)) site = 'https://' + (site.includes('.') ? site : site + '.com');
+      window.open(site, '_blank', 'noopener');
+      return respond('Opening ' + site + '.');
+    }
+
+    // web search
+    m = lower.match(/^(?:search|google|look up) (?:for )?(.+)/);
+    if(m){
+      const q = encodeURIComponent(m[1].trim());
+      window.open('https://www.google.com/search?q=' + q, '_blank', 'noopener');
+      return respond('Searching the web for "' + m[1].trim() + '".');
+    }
+
+    // fallback -> AI (education, social life, general topics)
+    const aiReply = await askAI(input);
+    return respond(aiReply);
+  }
+
+  document.getElementById('send-btn').addEventListener('click', () => {
+    const input = document.getElementById('cmd-input');
+    const v = input.value.trim();
+    if(!v) return;
+    addMessage('user', v);
+    handleCommand(v);
+  });
+  document.getElementById('cmd-input').addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      const v = e.target.value.trim();
+      if(!v) return;
+      addMessage('user', v);
+      handleCommand(v);
+    }
+  });
+
+  /* quick tool buttons */
+  document.querySelectorAll('.tool-btn[data-cmd]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const cmd = btn.getAttribute('data-cmd');
+      addMessage('user', cmd);
+      handleCommand(cmd);
+    });
+  });
+  document.getElementById('tool-settings').addEventListener('click', openSettings);
+
+  /* ---------------- SETTINGS MODAL ---------------- */
+  const overlay = document.getElementById('settings-overlay');
+  function openSettings(){
+    document.getElementById('opt-voice').checked = !!state.settings.voice;
+    document.getElementById('opt-wake').checked = !!state.settings.wake;
+    document.getElementById('opt-notify').checked = !!state.settings.notify;
+    document.getElementById('opt-endpoint').value = state.settings.aiEndpoint || '';
+    document.getElementById('opt-key').value = state.settings.aiKey || '';
+    document.getElementById('opt-model').value = state.settings.aiModel || 'gpt-4o-mini';
+    overlay.classList.add('show');
+  }
+  document.getElementById('open-settings').addEventListener('click', openSettings);
+  document.getElementById('close-settings').addEventListener('click', ()=>overlay.classList.remove('show'));
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.classList.remove('show'); });
+
+  document.getElementById('save-settings').addEventListener('click', ()=>{
+    state.settings.voice = document.getElementById('opt-voice').checked;
+    state.settings.wake = document.getElementById('opt-wake').checked;
+    state.settings.notify = document.getElementById('opt-notify').checked;
+    state.settings.aiEndpoint = document.getElementById('opt-endpoint').value.trim();
+    state.settings.aiKey = document.getElementById('opt-key').value.trim();
+    state.settings.aiModel = document.getElementById('opt-model').value.trim() || 'gpt-4o-mini';
+    saveState();
+    ensureNotifyPermission();
+    setWakeMode(state.settings.wake);
+    overlay.classList.remove('show');
+    respond('Settings saved.');
+  });
+
+  // apply wake mode on load if previously enabled
+  if(state.settings.wake && recognizer){
+    setTimeout(()=>setWakeMode(true), 4200);
+  }
+
+})();
+</script>
+</body>
+</html

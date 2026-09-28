@@ -1,0 +1,80 @@
+# J.A.R.V.I.S — Personal AI Assistant
+
+A single-page, browser-based personal assistant with a Marvel-inspired HUD theme (dark interface, glowing cyan "arc reactor" core, Orbitron/Rajdhani typography). It runs entirely client-side — no server, no build step, no install — in one file: index.html.
+
+## What it does
+
+- *Voice + text interface* — talk to it (Web Speech API) or type commands.
+- *Tasks* — add, complete, delete. Persisted in the browser (localStorage).
+- *Notes* — quick capture, saved locally.
+- *Reminders* — with optional time label; pairs with desktop notifications.
+- *Timers* — "set a timer for 5 minutes" → beep + notification when done.
+- *Calculator* — "calculate 42 * 8" or just type 42*8.
+- *Time / date, jokes, motivational quotes.*
+- *Web actions* — "open github.com", "search black holes" (opens Google).
+- *Open-ended Q&A on any topic* (schoolwork, general knowledge, advice, etc.) — optional, once you connect an AI API key in Settings. Without a key, JARVIS still handles everything above and tells you plainly when a question is outside its built-in skills.
+- *Wake word mode* ("Hey Jarvis…") for hands-free use, toggleable in Settings.
+- Fully responsive — same file works on a laptop browser and an Android phone browser.
+
+## Files
+
+- index.html — the entire app (HTML + CSS + JS in one file).
+- README.md — this file.
+
+## Run it locally in VS Code
+
+1. Open the project folder in VS Code.
+2. Install the *Live Server* extension (or any static server), OR just double-click index.html to open it directly in a browser.
+3. Right-click index.html → *Open with Live Server* (recommended, since some browsers restrict microphone access on file:// URLs).
+4. The app opens at http://127.0.0.1:5500 (or similar). Click *ENTER* past the boot sequence and start talking or typing.
+
+> *Microphone note:* Browsers require a secure context (https:// or localhost) for voice input to work. Plain file:// may block the mic — use Live Server or any local host, or the GitHub Pages URL below.
+
+## Deploy with GitHub (so it's usable on your phone too)
+
+1. Create a new repository on GitHub, e.g. jarvis-assistant.
+2. Push these two files:
+   bash
+   git init
+   git add index.html README.md
+   git commit -m "Add J.A.R.V.I.S personal assistant"
+   git branch -M main
+   git remote add origin https://github.com/<your-username>/jarvis-assistant.git
+   git push -u origin main
+   
+3. In the repo, go to *Settings → Pages, set **Source* to the main branch (root), and save.
+4. GitHub gives you a live URL like:
+   https://<your-username>.github.io/jarvis-assistant/
+5. Open that link on your *laptop* and on your *Android phone's browser* (Chrome recommended) — same app, same theme, on both. On Android Chrome you can tap the browser menu → *Add to Home screen* to launch it like an app.
+
+## Browser support
+
+| Feature | Chrome / Edge (desktop & Android) | Safari (macOS/iOS) | Firefox |
+|---|---|---|---|
+| Voice input (SpeechRecognition) | ✅ | ⚠️ Limited | ❌ Not supported |
+| Voice output (SpeechSynthesis) | ✅ | ✅ | ✅ |
+| Tasks/Notes/Reminders/Timers/Calculator | ✅ | ✅ | ✅ |
+| Desktop notifications | ✅ | ✅ (macOS) | ✅ |
+
+If voice input isn't supported, the microphone button disables itself automatically — everything else still works by typing.
+
+## Connecting an AI for "every topic" answers (optional)
+
+By default JARVIS handles tasks, notes, reminders, timers, calculations, jokes, quotes, time/date, and web search/open commands without any external service. For genuinely open-ended questions (explain a concept, help with homework, general advice), you can connect any *OpenAI-compatible* chat-completions API:
+
+1. Click the ⚙️ (Settings) icon.
+2. Enter:
+   - *AI endpoint* — e.g. https://api.openai.com/v1/chat/completions (or any compatible provider/self-hosted endpoint).
+   - *API key* — stored only in your browser's localStorage, never sent anywhere except your chosen endpoint.
+   - *Model name* — e.g. gpt-4o-mini.
+3. Save. Any question that doesn't match a built-in command is now sent to that endpoint.
+
+*About CORS:* some providers block direct requests from a browser tab for security reasons. If you see a connection error, the usual fix is a tiny proxy (a one-route serverless function, e.g. on Vercel/Cloudflare Workers) that forwards your request to the provider and adds your key server-side, so the key never has to live in the browser at all. That's a good next step if you want to harden this for regular use — this project intentionally keeps the client 100% static so it can run from GitHub Pages with zero backend.
+
+## Customizing the look
+
+All styling is in the <style> block at the top of index.html via CSS custom properties (--cyan, --gold, --bg-deep, etc.) — change those values to re-theme the whole interface without touching layout code.
+
+## Privacy
+
+Tasks, notes, reminders, and settings (including any API key you add) are stored only in your browser's local storage on your own device. Nothing is sent anywhere unless you explicitly connect an AI endpoint, in which case only the text of your open-ended question is sent to that endpoint.
